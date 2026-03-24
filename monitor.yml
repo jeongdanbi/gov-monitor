@@ -1,0 +1,43 @@
+name: 정부기관 보도자료 모니터링
+
+on:
+  schedule:
+    # 평일 오전 8시 ~ 오후 8시 사이, 30분마다 실행 (UTC 기준 → KST = UTC+9)
+    # KST 08:00~20:00 = UTC 23:00(전날)~11:00
+    - cron: '0,30 23 * * 0-3'   # 일~수 UTC 23시 (KST 월~목 08시)
+    - cron: '0,30 0-10 * * 1-5' # 월~금 UTC 0~10시 (KST 09~19시)
+    - cron: '0 11 * * 1-5'      # 월~금 UTC 11시 (KST 20시)
+  workflow_dispatch: # 수동 실행 버튼도 활성화
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # seen.json 커밋을 위해 필요
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 모니터링 실행
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python monitor.py
+
+      - name: seen.json 변경사항 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen.json
+          # 변경이 있을 때만 커밋 (새 글이 있었던 경우)
+          git diff --cached --quiet || git commit -m "chore: seen.json 업데이트"
+          git push
